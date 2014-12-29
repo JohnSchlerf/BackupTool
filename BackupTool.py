@@ -280,11 +280,16 @@ class BackupTool:
   archive_directory = 'OldSnapshots'
   backupRun = False
 
+  use_gui = True
+
   def __init__(self,configfile):
     self.filename = configfile
     if os.path.isfile(configfile):
       self.parse()
-    self.backupdialog()
+    if self.use_gui:
+      self.backupdialog()
+    else:
+      self.runbackup()
 
   def saveconfig(self):
     # OK, this is much less ambitious than the "parse" file below.
@@ -315,6 +320,8 @@ class BackupTool:
           self.current_directory = words[1]
         elif words[0]=="archival_name":
           self.archive_directory = words[1]
+        elif words[0]=="use_gui":
+          self.use_gui = words[1]=="True"
 
   def populated2bup(self):
     self.d2bup.delete(0,END)
@@ -419,8 +426,9 @@ class BackupTool:
     return self.target_key == self.system_key
 
   def runbackup(self):
-    # Change the status label:
-    self.status.set("Running...")
+    if self.use_gui:
+      # Change the status label:
+      self.status.set("Running...")
     self.backupRun = False
     backingup = True
     if not(self.system_key):
@@ -431,8 +439,12 @@ class BackupTool:
     if not(os.path.isdir(self.target_directory)):
       mkdir_better(self.target_directory)
     if not(self.getTargetKey()):
-      if not(yesNoDialog('WARNING -- This appears to be a backup of a different system.  This backup may overwrite/delete previous files.  Continue anyway?')):
-        backingup = False
+      if self.use_gui:
+        if not(yesNoDialog('WARNING -- This appears to be a backup of a different system.  This backup may overwrite/delete previous files.  Continue anyway?')):
+          backingup = False
+      else:
+        print "WARNING -- This appears to be a backup of a different system. Aborting!"
+	backingup = False
     if backingup:
       self.backuptime = time.localtime()
       current_backup = os.path.join(self.target_directory,self.current_directory)
@@ -454,10 +466,12 @@ class BackupTool:
       directoryLink(current_backup,archival_snapshot)
       self.setTargetKey()
       self.backupRun = True
-    if self.backupRun:
-      self.status.set("Finished!")
-    else:
-      self.status.set("Aborted.")
+    if self.use_gui:
+      if self.backupRun:
+        self.status.set("Finished!")
+      else:
+        self.status.set("Aborted.")
+
 
 if __name__ == '__main__':
   # Set some default os-specific stuff:
