@@ -127,14 +127,23 @@ archival_dir_for_testing = os.path.join("C:/Archive",time.strftime("%Y%U--%a-%b-
 # list of tuples containing all filenames (as 
 # relative paths) and modification times (rounded
 # to nearest second):
-def ModificationDates(directory):
+def ModificationDates(directory,ignoredirs=None,ignorefiles=None):
   my_list = []
   for dirpath,dirnames,filenames in os.walk(directory):
-    for file in filenames:
-      modtime = round(os.path.getmtime(os.path.join(dirpath,file)))
-      filepath = os.path.join(dirpath[1+len(directory):],file)
+    if ignoredirs:
+      dirnames[:] = [
+        dn for dn in dirnames
+        if dn not in ignoredirs ]
+    if ignorefiles:
+      filenames[:] = [
+        fn for fn in filenames
+        if fn not in ignorefiles ]
+    for onefile in filenames:
+      modtime = round(os.path.getmtime(os.path.join(dirpath,onefile)))
+      filepath = os.path.join(dirpath[1+len(directory):],onefile)
       my_list.append((filepath,modtime))
   return set(my_list)
+
 
 # Make a list out of my set; re-add path if 
 # necessary.
@@ -293,21 +302,27 @@ class BackupTool:
 
   def saveconfig(self):
     # OK, this is much less ambitious than the "parse" file below.
-    # I'm throwing away most custom comments.  Could be done better.
+    # I'm throwing away most custom comments. Could be done better.
     cfg = open(self.filename,'w')
     cfg.write('# Autosaving config file.'+'\n')
-    cfg.write('last_backup ' + time.strftime('%h %D %Y %H:%M',self.backuptime) + '\n')
+    cfg.write('last_backup ' + time.strftime('%Y %m %d %H %M',self.backuptime) + '\n')
     for d in self.directories_to_backup:
       cfg.write('directory_to_backup ' + d + '\n')
     cfg.write('system_key ' + self.system_key + '\n')
     cfg.write('target_directory ' + self.target_directory + '\n')
     cfg.write('latest_snapshot_name ' + self.current_directory + '\n')
     cfg.write('archival_name ' + self.archive_directory + '\n')
+    cfg.write('use_gui ' + str(use_gui) + '\n')
+    # preserve some lines:
+    for line in self.configLinesToPreserve:
+      cfg.write(line)
+    cfg.close()
 
   def parse(self):
+    self.configLinesToPreserve = []
     config = open(self.filename)
     for line in config.readlines():
-      if line[0] in "!@#$%&*\n": None
+      if line[0] in "!@#$%&*\n": self.configLinesToPreserve.append(line)
       else:
         words = line.split()
         if words[0] == "directory_to_backup":
@@ -322,7 +337,12 @@ class BackupTool:
           self.archive_directory = words[1]
         elif words[0]=="use_gui":
           self.use_gui = words[1]=="True"
-
+        elif words[0]=="last_backup":
+          None # make sure I throw this out
+        else:
+          self.configLinesToPreserve.append(line)
+    config.close()
+    
   def populated2bup(self):
     self.d2bup.delete(0,END)
     for directory in self.directories_to_backup:
